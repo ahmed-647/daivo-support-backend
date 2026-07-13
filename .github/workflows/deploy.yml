@@ -1,0 +1,23 @@
+name: Deploy Daivo Backend
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/daivo-support-backend
+            git pull origin main
+            docker build -t daivo-backend .
+            docker stop daivo-backend-container || true
+            docker rm daivo-backend-container || true
+            docker run -d --name daivo-backend-container -p 5000:5000 --env-file .env daivo-backend

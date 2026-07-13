@@ -15,6 +15,10 @@ const KBDocumentSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    rawText: {
+        type: String,
+        select: false 
+    },
     chunksCount: { 
         type: Number, 
         default: 0,

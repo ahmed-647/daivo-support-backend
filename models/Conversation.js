@@ -23,6 +23,10 @@ const ConversationSchema = new mongoose.Schema({
         max: [1.0, 'Score cannot exceed 1.0'],
         default: 1.0 
     },
+     responseTimeMs: {
+        type: Number,
+        default: 0
+    },
     status: { 
         type: String, 
         enum: ['resolved', 'pending', 'escalated'], 
