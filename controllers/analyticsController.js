@@ -117,6 +117,6 @@ exports.getPeakHours = async (req, res) => {
             note: "Hours are in UTC (0-23)"
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error fetching peak hours", error: error.message });
+        res.status(500).json({ success: false, message: "Error fetching peak hour's", error: error.message });
     }
 };
