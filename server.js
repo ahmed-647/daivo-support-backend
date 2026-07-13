@@ -4,33 +4,42 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
-const http = require('http'); // ⚡ Added for Socket.io
-const { Server } = require('socket.io'); // ⚡ Added for Socket.io
+const http = require('http'); // Added for Socket.io
+const { Server } = require('socket.io'); // Added for Socket.io
 require('dotenv').config();
 
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const authRoutes = require('./routes/authRoutes');
-const chatRoutes = require('./routes/chatRoutes'); 
-const kbRoutes = require('./routes/kbRoutes'); 
+const chatRoutes = require('./routes/chatRoutes');
+const kbRoutes = require('./routes/kbRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ⚡ HTTP Server & Socket.io Setup
+// HTTP Server & Socket.io Setup
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
     cors: { origin: process.env.CLIENT_URL || '*' }
 });
 
-// Har request mein io accessible banane ke liye
+// Make io accessible on every request via req.app.get('io')
 app.set('io', io);
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] Client connected: ${socket.id}`);
+
+    // Customer / Agent joins a conversation-specific room so that
+    // targeted events (e.g. transferred_successfully) only reach
+    // the people involved in that chat.
+    socket.on('join_room', (conversationId) => {
+        socket.join(conversationId);
+        console.log(`[SOCKET] ${socket.id} joined room: ${conversationId}`);
+    });
+
     socket.on('disconnect', () => {
         console.log(`[SOCKET] Client disconnected: ${socket.id}`);
     });
@@ -39,24 +48,24 @@ io.on('connection', (socket) => {
 // ==========================================
 // 1. GLOBAL ADVANCED SECURITY MIDDLEWARES
 // ==========================================
-app.use(helmet()); 
+app.use(helmet());
 app.use(cors({
-    origin: process.env.CLIENT_URL || '*', 
+    origin: process.env.CLIENT_URL || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, 
+    max: 100,
     message: { success: false, message: 'Too many requests from this IP, please try again later.' },
-    standardHeaders: true, 
-    legacyHeaders: false, 
+    standardHeaders: true,
+    legacyHeaders: false,
 });
-app.use('/api/', limiter); 
+app.use('/api/', limiter);
 
 // Body Parsers & Request Logger
-app.use(express.json({ limit: '10kb' })); 
+app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 if (process.env.NODE_ENV !== 'production') {
@@ -72,7 +81,7 @@ const connectDB = async () => {
         console.log(`[DATABASE] Daivo Atlas Connected: ${conn.connection.host} ✅`);
     } catch (err) {
         console.error(`[DATABASE ERROR] Connection failed! ❌: ${err.message}`);
-        process.exit(1); 
+        process.exit(1);
     }
 };
 
@@ -82,10 +91,11 @@ connectDB();
 // ROUTES INTEGRATION
 // ==========================================
 app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes); 
-app.use('/api/kb', kbRoutes); 
+app.use('/api/chat', chatRoutes);
+app.use('/api/kb', kbRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/conversations', conversationRoutes);
+
 // ==========================================
 // 3. CORE DIAGNOSTIC ROUTES
 // ==========================================
@@ -125,13 +135,11 @@ app.use((err, req, res, next) => {
 // ==========================================
 // 5. SERVER BOOTUP & GRACEFUL SHUTDOWN
 // ==========================================
-//Replaced app.listen with httpServer.listen
 httpServer.listen(PORT, () => {
     console.log(`[SERVER] High-level engine running in [${process.env.NODE_ENV || 'development'}] mode on port ${PORT}`);
 });
 
 process.on('unhandledRejection', (err) => {
     console.error(`[CRITICAL ERROR] Unhandled Rejection: ${err.message}`);
-    //Replaced server.close with httpServer.close
     httpServer.close(() => process.exit(1));
 });

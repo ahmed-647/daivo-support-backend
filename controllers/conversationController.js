@@ -2,7 +2,7 @@
 const Conversation = require('../models/Conversation');
 const { Parser } = require('@json2csv/plainjs');
 
-// Helper: query filters build karna (search + date range) — dono endpoints mein reuse hoga
+// Helper: builds query filters (search + date range) — reused by both endpoints below
 const buildFilter = (query) => {
     const { search, from, to, status } = query;
     const filter = {};
@@ -81,5 +81,41 @@ exports.exportConversations = async (req, res) => {
         res.status(200).send(csv);
     } catch (error) {
         res.status(500).json({ success: false, message: "Error exporting conversations", error: error.message });
+    }
+};
+
+// 3. ASSIGN AGENT — called when a support agent clicks "Accept Chat" on the dashboard
+exports.assignAgentToChat = async (req, res) => {
+    try {
+        const io = req.app.get('io');
+        const { conversationId, agentId } = req.body;
+
+        if (!conversationId || !agentId) {
+            return res.status(400).json({ success: false, message: "conversationId and agentId are required" });
+        }
+
+        const conversation = await Conversation.findByIdAndUpdate(
+            conversationId,
+            { status: 'active_agent', assignedAgent: agentId },
+            { new: true }
+        );
+
+        if (!conversation) {
+            return res.status(404).json({ success: false, message: "Conversation not found" });
+        }
+
+        // Notify the specific conversation room (customer + agent) that the handoff is complete
+        if (io) {
+            io.to(conversationId.toString()).emit('transferred_successfully', {
+                message: "I'm transferring you to a human agent.",
+                agentId
+            });
+        } else {
+            console.warn('[SOCKET WARNING] io instance not found on app — skipping real-time emit');
+        }
+
+        res.status(200).json({ success: true, message: 'Agent assigned successfully', conversation });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error assigning agent", error: error.message });
     }
 };
