@@ -1,4 +1,3 @@
-// controllers/chatController.js
 const Conversation = require('../models/Conversation');
 const FAQ = require('../models/FAQ');
 const { OpenAI } = require('openai');
@@ -81,11 +80,7 @@ exports.handleChat = async (req, res) => {
             context = "No direct match found in Knowledge Base.";
         }
 
-        // 2. Advanced multilingual + structured-output system prompt.
-        // Instead of guessing the user's language with regex after the fact,
-        // the model itself detects the language and crafts the reply in it.
-        // This generalizes to ANY language the user writes in, not just
-        // English / Roman Urdu.
+        // 2. Advanced multilingual + structured-output system prompt with Casual Greeting Handler
         const systemPrompt = `
         You are Daivo Support AI, an expert customer support assistant.
         Use the following Knowledge Base context to answer the user's question accurately.
@@ -94,18 +89,18 @@ exports.handleChat = async (req, res) => {
         ${context}
 
         [INSTRUCTIONS]
-        1. Detect the language/style the user wrote in (e.g. "English", "Roman Urdu",
-           "Arabic", "Hindi", etc.) and reply naturally in that same language/style.
-        2. If the context answers the user's query, answer accurately based ONLY on
-           the context. Do not invent facts that are not supported by the context.
-        3. If the context does NOT contain a relevant answer, you must NOT guess.
-           Instead, mark the query as unanswerable and write a short, polite message
-           (in the user's detected language/style) telling them you could not find
-           an official answer and that you are forwarding them to a live support agent.
+        1. Detect the language/style the user wrote in (e.g. "English", "Roman Urdu", "Arabic", "Hindi", etc.) and reply naturally in that same language/style.
+        
+        2. CASUAL GREETINGS & CHITCHAT RULE: 
+           If the user's message is a simple greeting, salutation, or polite chitchat (e.g., "hi", "hello", "hey", "salam", "how are you", "thanks", "thank you", "good morning"), respond warmly and friendly (e.g., "Hello! How can I help you today?" or "Walaikum Assalam! Main aapki kya madad kar sakta hoon?"). 
+           In this specific case, set "answerable" to true. Do NOT trigger a human handoff/escalation for greetings or pleasantries.
+
+        3. If the context contains a relevant answer to the user's specific business query, answer accurately based ONLY on the context. Do not invent facts that are not supported by the context. Set "answerable" to true.
+
+        4. If the context does NOT contain a relevant answer to a genuine business query, you must NOT guess. Instead, mark the query as unanswerable ("answerable": false) and write a short, polite message (in the user's detected language/style) telling them you could not find an official answer and that you are forwarding them to a live support agent.
 
         [OUTPUT FORMAT — STRICT]
-        Respond with ONLY a raw JSON object, no markdown fences, no extra text,
-        in exactly this shape:
+        Respond with ONLY a raw JSON object, no markdown fences, no extra text, in exactly this shape:
         {
           "language": "<detected language/style, e.g. English or Roman Urdu>",
           "answerable": true or false,
@@ -141,7 +136,6 @@ exports.handleChat = async (req, res) => {
         console.log(`[AI PROVIDER USED] ${usedProvider}`);
 
         // 4. Parse the structured JSON response, with a safe fallback
-        // in case the model doesn't return valid JSON.
         const parsed = safeParseAIResponse(rawAIText);
 
         let aiResponse;
@@ -151,8 +145,7 @@ exports.handleChat = async (req, res) => {
             chatStatus = parsed.answerable ? 'resolved' : 'escalated';
             aiResponse = parsed.reply;
         } else {
-            // Fallback safety net: if the AI didn't return valid JSON,
-            // escalate by default rather than risk showing broken output.
+            // Fallback safety net
             console.warn('[AI PARSE WARNING] Could not parse structured AI response, escalating as a safety fallback.');
             chatStatus = 'escalated';
             aiResponse = "I couldn't process your request properly. Let me connect you to a live support representative.";
