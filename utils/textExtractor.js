@@ -1,5 +1,5 @@
 // utils/textExtractor.js
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const mammoth = require('mammoth');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -7,8 +7,9 @@ const cheerio = require('cheerio');
 // Buffer se text nikalne ke liye (S3 se file download karke)
 exports.extractFromBuffer = async (buffer, fileType) => {
     if (fileType === '.pdf') {
-        const data = await pdfParse(buffer);
-        return data.text;
+        const parser = new PDFParse({ data: buffer });
+        const result = await parser.getText();
+        return result.text;
     }
     if (fileType === '.docx' || fileType === '.doc') {
         const result = await mammoth.extractRawText({ buffer });
