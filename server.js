@@ -20,10 +20,42 @@ const conversationRoutes = require('./routes/conversationRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// HTTP Server & Socket.io Setup
+// ==========================================
+// 1. DYNAMIC CORS & ORIGINS CONFIGURATION
+// ==========================================
+// Define the list of allowed origins
+const allowedOrigins = [
+    'http://localhost:3000',      // Saad's Next.js development server
+    'http://localhost:5173',      // Safe-fallback for Vite standard port
+    'https://app.daivo.tech',     // Production frontend URL
+    'https://wet-sites-follow.loca.lt',
+    'http://192.168.80.165:3000' // Your Active Localtunnel URL 
+];
+
+// Helper function to validate origin requests dynamically
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, Postman, or curl)
+        if (!origin) return callback(null, true);
+        
+        // If the origin is in our allowed list, or we are in development mode, we allow it
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        } else {
+            return callback(new Error('Blocked by CORS Policy: This origin is not allowed access.'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true // Crucial for passing auth tokens and cookies smoothly
+};
+
+// ==========================================
+// 2. HTTP SERVER & SOCKET.IO SETUP
+// ==========================================
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
-    cors: { origin: process.env.CLIENT_URL || '*' }
+    cors: corsOptions // Binding the same dynamic CORS options to Socket.io
 });
 
 // Make io accessible on every request via req.app.get('io')
@@ -46,14 +78,12 @@ io.on('connection', (socket) => {
 });
 
 // ==========================================
-// 1. GLOBAL ADVANCED SECURITY MIDDLEWARES
+// 3. GLOBAL ADVANCED SECURITY MIDDLEWARES
 // ==========================================
-app.use(helmet());
-app.use(cors({
-    origin: process.env.CLIENT_URL || '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+app.use(helmet({
+    crossOriginResourcePolicy: false // Allows files/images to be shared without being blocked
 }));
+app.use(cors(corsOptions)); // Apply updated dynamic CORS to standard Express requests
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -73,7 +103,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // ==========================================
-// 2. ROBUST DATABASE CONNECTION ARCHITECTURE
+// 4. ROBUST DATABASE CONNECTION ARCHITECTURE
 // ==========================================
 const connectDB = async () => {
     try {
@@ -97,7 +127,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/conversations', conversationRoutes);
 
 // ==========================================
-// 3. CORE DIAGNOSTIC ROUTES
+// 5. CORE DIAGNOSTIC ROUTES
 // ==========================================
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -115,7 +145,7 @@ app.get('/health', (req, res) => {
 });
 
 // ==========================================
-// 4. GLOBAL ERROR HANDLING MIDDLEWARES
+// 6. GLOBAL ERROR HANDLING MIDDLEWARES
 // ==========================================
 app.use((req, res, next) => {
     const error = new Error(`Not Found - ${req.originalUrl}`);
@@ -133,7 +163,7 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
-// 5. SERVER BOOTUP & GRACEFUL SHUTDOWN
+// 7. SERVER BOOTUP & GRACEFUL SHUTDOWN
 // ==========================================
 httpServer.listen(PORT, () => {
     console.log(`[SERVER] High-level engine running in [${process.env.NODE_ENV || 'development'}] mode on port ${PORT}`);
